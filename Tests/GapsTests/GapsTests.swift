@@ -13,12 +13,12 @@ final class GapsTests: XCTestCase {
         func testUnparsedArgumentPosition() {
                 var unparsed: [String]
                 
-                let a = StringOption(short: "a")
-                let b = StringOption(short: "b")
-                let c = StringOption(short: "c")
-                let boolOption = BooleanOption(long: "bool")
+                let a = StringOption(flags: "a")
+                let b = StringOption(flags: "b")
+                let c = StringOption(flags: "c")
+                let flagOption = FlagOption(flags: "bool")
                 
-                let parser = OptionParser(a, b, c, boolOption, parserOptions: [.allowUnparsedOptions])
+                let parser = OptionParser(a, b, c, flagOption, settings: [.allowUnparsedOptions])
                 
                 /* A. only unparsed arguments */
 
@@ -32,7 +32,7 @@ final class GapsTests: XCTestCase {
                 XCTAssertEqual(unparsed[0], "one")
                 XCTAssertEqual(unparsed[1], "two")
                 XCTAssertEqual(unparsed[2], "three")
-                XCTAssertFalse(boolOption.value)
+                XCTAssertFalse(flagOption.boolValue)
                 
                 /* B. mixed with options */
                 
@@ -46,7 +46,7 @@ final class GapsTests: XCTestCase {
                 XCTAssertEqual(unparsed[0], "one")
                 XCTAssertEqual(unparsed[1], "two")
                 XCTAssertEqual(unparsed[2], "three")
-                XCTAssertFalse(boolOption.value)
+                XCTAssertFalse(flagOption.boolValue)
                 
                 /*
                  *  C. with stop operand -- the order of
@@ -64,14 +64,14 @@ final class GapsTests: XCTestCase {
                 XCTAssertTrue(unparsed.contains("one"))
                 XCTAssertTrue(unparsed.contains("two"))
                 XCTAssertTrue(unparsed.contains("three"))
-                XCTAssertFalse(boolOption.value)
+                XCTAssertFalse(flagOption.boolValue)
                 XCTAssertEqual(unparsed[0], "one")
                 XCTAssertEqual(unparsed[1], "two")
                 XCTAssertEqual(unparsed[2], "three")
                 XCTAssertEqual(unparsed[3], "-four")
                 XCTAssertEqual(unparsed[4], "--five")
                 XCTAssertEqual(unparsed[5], "---six")
-                XCTAssertFalse(boolOption.value)
+                XCTAssertFalse(flagOption.boolValue)
                 
                 /* D. options out of order and the bool option set */
                 
@@ -85,26 +85,26 @@ final class GapsTests: XCTestCase {
                 XCTAssertEqual(unparsed[0], "one")
                 XCTAssertEqual(unparsed[1], "two")
                 XCTAssertEqual(unparsed[2], "three")
-                XCTAssertTrue(boolOption.value)
+                XCTAssertTrue(flagOption.boolValue)
         }
         
         func testArgumentExpansion() {
-                let a = BooleanOption(short: "a")
-                let b = BooleanOption(short: "b")
-                let c = BooleanOption(short: "c")
-                let d = BooleanOption(short: "d")
+                let a = FlagOption(flags: "a")
+                let b = FlagOption(flags: "b")
+                let c = FlagOption(flags: "c")
+                let d = FlagOption(flags: "d")
                 
-                let multiString = ArrayOption(long: "strings")
-                let optionalString = OptionalStringOption(long: "optional")
+                let multiString = ArrayOption<String>(flags: "strings")
+                let optionalString = StringOption(flags: "optional", valueIsOptional: true)
         
                 let parser = OptionParser(a, b, c, d, multiString, optionalString)
                 
                 try? parser.parse(["GapsTests", "-abcd", "--strings=first", "second", "third", "--optional", "-a", "-b"])
                 
-                XCTAssertTrue(a.value)
-                XCTAssertTrue(b.value)
-                XCTAssertTrue(c.value)
-                XCTAssertTrue(d.value)
+                XCTAssertTrue(a.boolValue)
+                XCTAssertTrue(b.boolValue)
+                XCTAssertTrue(c.boolValue)
+                XCTAssertTrue(d.boolValue)
                 
                 XCTAssertEqual(["first", "second", "third"], multiString.value)
                 
@@ -113,21 +113,22 @@ final class GapsTests: XCTestCase {
         }
         
         func testFlagBehavior() {
-                let flagOption = BooleanOption(short: "f")
+                let flagOption = FlagOption(flags: "f")
                 let parser = OptionParser(flagOption)
                 
-                /* Boolean options can appear more than once */
+                /* Flag options can be used more than once */
                 
-                try? parser.parse(["GapsTests", "-fff", "-f"])
+                try? parser.parse(["GapsTests", "-fff", "-ff"])
                 
-                XCTAssertTrue(flagOption.value)
+                XCTAssertTrue(flagOption.boolValue)
+                XCTAssertEqual(flagOption.count, 5)
                 XCTAssertEqual(parser.unparsedArguments.count, 0)
         }
         
         func testErrorsAreThrown() {
-                let stringOption = StringOption(short: "a")
+                let stringOption = StringOption(flags: "a")
                 
-                let parser = OptionParser(stringOption, parserOptions: [.throwsErrors])
+                let parser = OptionParser(stringOption, settings: [.throwsErrors])
                 
                 /* A. unparsed argument */
                 
@@ -154,8 +155,8 @@ final class GapsTests: XCTestCase {
                 } catch {
                         if let gapsError = error as? ParserError {
                                 switch gapsError {
-                                case .invalidUsage(let option):
-                                        usedTwice = option.description == stringOption.description
+                                case .invalidUse(let optionDescription):
+                                        usedTwice = optionDescription == stringOption.description
                                 default:
                                         break
                                 }
@@ -171,8 +172,8 @@ final class GapsTests: XCTestCase {
                 } catch {
                         if let gapsError = error as? ParserError {
                                 switch gapsError {
-                                case .missingRequiredValue(let option):
-                                        missingValue = option.description == stringOption.description
+                                case .missingRequiredValue(optionDescription: let optionDescription):
+                                        missingValue = optionDescription == stringOption.description
                                 default:
                                         break
                                 }

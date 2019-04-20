@@ -77,9 +77,9 @@ open class CommandParser {
                 
                 catch let error as ParserError {
                         if let message = error.string {
-                                standardError.write(string: message)
+                                FileHandle.standardError.write(string: message)
                         }
-                        standardError.write(string: usage())
+                        FileHandle.standardError.write(string: usage())
                         exit(1)
                 }
                         
@@ -95,7 +95,7 @@ open class CommandParser {
                         strings.append(errorMessage)
                 }
                 
-                let title = String(format: "usage: %@ ", baseName)
+                let title = String(format: "usage: %@ ", String.baseName)
                 
                 let invocationLines = invocationMessage.split(separator: "\n")
                 
@@ -109,13 +109,15 @@ open class CommandParser {
                 }
                 
                 strings.append("")
-                strings.append("available commands:")                
-              
-                let length = commands.map( { $0.value.count } ).max() ?? 0
+                strings.append("available commands:")
                 
-                for command in commands {
+                let filteredCommands = commands.filter { $0.helpMessage != nil }
+                
+                let length = filteredCommands.map( { $0.value.count } ).max() ?? 0
+                
+                for command in filteredCommands {
                         let value = command.value.padding(toLength: length + 3, withPad: " ", startingAt: 0)
-                        strings.append("  " + value + command.helpMessage)
+                        strings.append("  " + value + command.helpMessage!)
                 }
                 
                 strings.append("")

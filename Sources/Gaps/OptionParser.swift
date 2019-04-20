@@ -9,23 +9,65 @@ import Foundation
 
 open class OptionParser {
         open var helpName: String?
-        public var parserOptions: [ParserOption]
-        private var _invocationMessage: String?
-        private(set) public var unclaimedArguments = [String]()
+        public var parserSettings: [ParserSetting]
         private(set) public var unparsedArguments = [String]()
-        private(set) public var stoppedArguments = [String]()
-        private var requiredOptions = [Option]()
-        private var flags = Flags()
-        private(set) public var options = [Option]()
+        private var _invocationMessage: String?
+        private var _options = [OptionProtocol]()
+        
+        public var options: [OptionProtocol] {
+                get {
+                        return _options
+                }
+                set(optionArray) {
+                        _options.removeAll()
+                        var usedShortFlags = Set<String>()
+                        var usedLongFlags = Set<String>()
+                        optionArray.forEach {
+                                validateFlag($0.flag.short, usedFlags: &usedShortFlags)
+                                validateFlag($0.flag.long, usedFlags: &usedLongFlags)
+                                $0.reset()
+                                $0.setParser(self)
+                                _options.append($0)
+                        }
+                }
+        }
         
         open var invocationMessage: String {
                 return _invocationMessage ?? autoInvocationMessage()
+        }        
+        
+        private func validateFlag(_ newFlag: String?, usedFlags: inout Set<String>) {
+                guard newFlag != nil else {
+                        return
+                }
+                guard !usedFlags.contains(newFlag!) else {
+                        fatalError("non-unique flag \(newFlag!.inSingleQuotes())")
+                }
+                usedFlags.insert(newFlag!)
+        }
+        
+        public func setInvocationMessage(_ newValue: String?) {
+                _invocationMessage = newValue
+        }
+        
+        private func autoInvocationMessage() -> String {
+                let flags: [String] = options.map {
+                        let flag = $0.flag.short ?? $0.flag.long!
+                        return $0.isRequired ? flag : "[" + flag + "]"
+                }
+                return flags.joined(separator: " ")
         }
         
         open func usage() -> String {
                 var strings = [String]()
                 
-                let title = helpName == nil ? String(format: "usage: %@ ", baseName) : String(format: "usage: %@ %@ ", baseName, helpName!)
+                var title: String
+                
+                if helpName == nil {
+                        title = String(format: "usage: %@ ", String.baseName)
+                } else {
+                        title = String(format: "usage: %@ %@ ", String.baseName, helpName!)
+                }
                 
                 for (i, string) in invocationMessage.split(separator: "\n").enumerated() {
                         switch i {
@@ -53,64 +95,23 @@ open class OptionParser {
                 return strings.joined(separator: "\n")
         }
         
-        private init(options: [Option], helpName: String?, invocation: String?, parserOptions: [ParserOption]) {
-                self.parserOptions = parserOptions
+        private init(options: [OptionProtocol], helpName: String?, invocation: String?, settings: [ParserSetting]) {
+                self.parserSettings = settings
                 self.helpName = helpName
                 self._invocationMessage = invocation
-                setOptions(options)
+                self.options = options
         }
         
-        public convenience init(_ options: Option ..., helpName: String, invocation: String? = nil, parserOptions: [ParserOption] = []) {
-                self.init(options: options, helpName: helpName, invocation: invocation, parserOptions: parserOptions)
+        public convenience init(_ options: OptionProtocol ..., helpName: String, invocation: String? = nil, settings: [ParserSetting] = []) {
+                self.init(options: options, helpName: helpName, invocation: invocation, settings: settings)
         }
         
-        public convenience init(_ options: Option ..., invocation: String? = nil, parserOptions: [ParserOption] = []) {
-                self.init(options: options, helpName: nil, invocation: invocation, parserOptions: parserOptions)
+        public convenience init(_ options: OptionProtocol ..., invocation: String? = nil, settings: [ParserSetting] = []) {
+                self.init(options: options, helpName: nil, invocation: invocation, settings: settings)
         }        
         
-        public convenience init(_ options: Option ..., parserOptions: [ParserOption] = []) {
-                self.init(options: options, helpName: nil, invocation: nil, parserOptions: parserOptions)
-        }
-        
-        public func setOptions(_ options: [Option]) {
-                self.options.removeAll()
-                self.requiredOptions.removeAll()
-                self.flags = Flags()
-                for option in options {
-                        if let flag = option.flag.short {
-                                guard !flags.short.contains(flag) else {
-                                        fatalError("non-unique short flag \(flag.inSingleQuotes())")
-                                }
-                                flags.short.append(flag)
-                        }
-                        
-                        if let flag = option.flag.long {
-                                guard !flags.long.contains(flag) else {
-                                        fatalError("non-unique short flag \(flag.inSingleQuotes())")
-                                }
-                                flags.long.append(flag)
-                        }
-                        option.reset()
-                        option.parser = self
-                        self.options.append(option)
-                }
-        }
-        
-        public func setInvocationMessage(_ newValue: String?) {
-                _invocationMessage = newValue
-        }
-        
-        private func autoInvocationMessage() -> String {
-                var flags = [String]()
-                for option in options {
-                        var flag = option.flag.short ?? option.flag.long ?? ""
-                        if flag.isEmpty {
-                                continue
-                        }
-                        flag = option.isRequired ? flag : "[\(flag)]"
-                        flags.append(flag)
-                }
-                return flags.joined(separator: " ")
+        public convenience init(_ options: OptionProtocol ..., settings: [ParserSetting] = []) {
+                self.init(options: options, helpName: nil, invocation: nil, settings: settings)
         }
         
         private func expandedArguments(arguments: [String]? = nil, fromIndex: Int = 1) -> [String] {
@@ -131,23 +132,19 @@ open class OptionParser {
                                 continue
                         }
                         
-                        if argument.isEmpty {
-                                continue
-                        }
-                        
-                        if argument == stopOperand {
+                        if argument == String.stopOperand {
                                 expandedArguments.append(argument)
                                 stopped = true
                                 continue
                         }
                         
-                        if argument == fileOperand || argument == shortPrefix || argument == longPrefix {
+                        if argument == String.fileOperand || argument == String.shortPrefix || argument == String.longPrefix {
                                 expandedArguments.append(argument)
                                 continue
                         }
                         
                         if argument.hasLongPrefix {
-                                let arguments = argument.split(separator: assignmentOperand, maxSplits: 1)
+                                let arguments = argument.split(separator: Character.assignmentOperand, maxSplits: 1)
                                 expandedArguments.append(contentsOf: arguments.map { String($0) })
                                 continue
                         }
@@ -160,7 +157,7 @@ open class OptionParser {
                                 
                                 var argument = argument
                                 argument.removeFirst()
-                                expandedArguments.append(contentsOf: argument.map { shortPrefix + String($0) })
+                                expandedArguments.append(contentsOf: argument.map { String.shortPrefix + String($0) })
                                 continue
                         }
                         
@@ -168,25 +165,6 @@ open class OptionParser {
                 }
                 
                 return expandedArguments
-        }
-        
-        private func reset(arguments: [String]? = nil, fromIndex: Int = 1) throws {
-                unparsedArguments.removeAll()
-                stoppedArguments.removeAll()
-                requiredOptions.removeAll()
-                
-                for option in options {
-                        option.reset()
-                        if option.isRequired {
-                                requiredOptions.append(option)
-                        }
-                }
-                
-                unclaimedArguments = expandedArguments(arguments: arguments, fromIndex: fromIndex)
-                
-                if unclaimedArguments.count == 0 {
-                        throw ParserError.noInput
-                }
         }
         
         public final func parse(_ arguments: [String], fromIndex: Int = 1) throws {
@@ -199,54 +177,60 @@ open class OptionParser {
         
         private func parse(arguments: [String]? = nil, fromIndex: Int = 1) throws {
                 do {
-                        try reset(arguments: arguments, fromIndex: fromIndex)
+                        unparsedArguments.removeAll()
                         
-                        if let stopIndex = unclaimedArguments.firstIndex(of: stopOperand) {
+                        options.forEach {
+                                $0.reset()
+                        }
+                        
+                        var unclaimedArguments = expandedArguments(arguments: arguments, fromIndex: fromIndex)
+                        
+                        if unclaimedArguments.count == 0, !parserSettings.contains(.ignoreNoInput) {
+                                throw ParserError.noInput
+                        }
+                        
+                        var stoppedArguments = [String]()
+                        
+                        if let stopIndex = unclaimedArguments.firstIndex(of: String.stopOperand) {
                                 unclaimedArguments.remove(at: stopIndex)
                                 for _ in 0..<unclaimedArguments.count - stopIndex {
                                         stoppedArguments.append(unclaimedArguments.remove(at: stopIndex))
                                 }
                         }
                         
+                        var claimedIndices = Set<Int>()
+                        
                         for option in options {
-                                var optionIndicies = [Int]()
-                                var claimedValueIndicies = [Int]()
+                                var optionIndices = [Int]()
+                                var claimedValueIndices = [Int]()
                                 
                                 for (index, argument) in unclaimedArguments.enumerated() where option.flag.values.contains(argument) {
-                                        optionIndicies.append(index)
+                                        optionIndices.append(index)
                                 }
                                 
-                                if optionIndicies.isEmpty {
+                                if optionIndices.isEmpty {
                                         continue
                                 }
                                 
-                                if optionIndicies.count > 1, option.singleValue, !parserOptions.contains(.ignoreSingleValue) {
-                                        throw ParserError.invalidUsage(option: option)
-                                }
-                                
-                                for optionIndex in optionIndicies {
-                                        let last = unclaimedArguments.count - 1
+                                for optionIndex in optionIndices {                                        
+                                        var range = optionIndex + 1..<unclaimedArguments.count
                                         
-                                        if optionIndex == last {
-                                                try option.claimValue(nil)
+                                        for i in range {
+                                                if unclaimedArguments[i].isOption {
+                                                        range = range.lowerBound..<i
+                                                        break
+                                                }
+                                        }
+                                        
+                                        if range.isEmpty {
+                                                try option.claimValue()
                                                 continue
                                         }
                                         
-                                        let start = optionIndex + 1
-                                        
-                                        for argumentIndex in start...last {
-                                                let value = unclaimedArguments[argumentIndex]
-                                                
-                                                if !value.isNumerical && (value.hasShortPrefix || value.hasLongPrefix) {
-                                                        if argumentIndex == start {
-                                                                try option.claimValue(nil)
-                                                        }
-                                                        break
-                                                }
-                                                
+                                        try range.forEach {
                                                 do {
-                                                        try option.claimValue(value)
-                                                        claimedValueIndicies.append(argumentIndex)
+                                                        try option.claimValue(argument: unclaimedArguments[$0])
+                                                        claimedValueIndices.append($0)
                                                 }
                                                 
                                                 catch let error as ParserError {
@@ -260,32 +244,34 @@ open class OptionParser {
                                         }
                                 }
                                 
-                                Set(optionIndicies + claimedValueIndicies).sorted(by: { $0 > $1 }).forEach {
-                                        unclaimedArguments.remove(at: $0)
-                                }
+                                claimedIndices = Set(claimedIndices + optionIndices + claimedValueIndices)
+                        }
+                        
+                        claimedIndices.sorted(by: { $0 > $1 }).forEach {
+                                unclaimedArguments.remove(at: $0)
                         }
                         
                         unparsedArguments.append(contentsOf: unclaimedArguments + stoppedArguments)
                         
-                        try requiredOptions.forEach {
-                                if !$0.wasSet {
-                                        throw ParserError.missingRequiredOption($0)
+                        for option in options where option.isRequired {
+                                if !option.wasSet {
+                                        throw ParserError.missingRequiredOption(optionDescription: option.description)
                                 }
                         }
                         
-                        if !parserOptions.contains(.allowUnparsedOptions), !unparsedArguments.isEmpty {
+                        if !parserSettings.contains(.allowUnparsedOptions), !unparsedArguments.isEmpty {
                                 throw ParserError.unparsedArgument(unparsedArguments.first!)
                         }
                 }
                         
                 catch let error as ParserError {
-                        if parserOptions.contains(.throwsErrors) {
+                        if parserSettings.contains(.throwsErrors) {
                                 throw error
                         }                        
                         if let message = error.string {
-                                standardError.write(string: (helpName ?? baseName) + ": " + message)
+                                FileHandle.standardError.write(string: (helpName ?? String.baseName) + ": " + message)
                         }
-                        standardError.write(string: usage())
+                        FileHandle.standardError.write(string: usage())
                         exit(1)
                 }
                 
