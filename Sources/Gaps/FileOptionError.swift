@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-public enum FileOptionError: Error {
+public enum FileOptionError: Error, CustomStringConvertible {
         case pathNotSet(optionDescription: String)
         case fileNotFound(path: String, optionDescription: String)
         case isDirectory(path: String, optionDescription: String)
@@ -13,7 +13,8 @@ public enum FileOptionError: Error {
         case isNotWritable(path: String, optionDescription: String)
         case couldNotCreate(path: String, optionDescription: String)
         case couldNotOpenForWriting(path: String, optionDescription: String)
-        public var string: String {
+        
+        public var description: String {
                 switch self {
                 case .pathNotSet(optionDescription: let optionDescription):
                         return "\(optionDescription) path not set"
@@ -34,4 +35,3 @@ public enum FileOptionError: Error {
                 }
         }
 }
-

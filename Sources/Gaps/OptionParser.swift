@@ -18,6 +18,7 @@ open class OptionParser {
                 get {
                         return _options
                 }
+                
                 set(optionArray) {
                         _options.removeAll()
                         var usedShortFlags = Set<String>()
@@ -40,9 +41,11 @@ open class OptionParser {
                 guard newFlag != nil else {
                         return
                 }
+                
                 guard !usedFlags.contains(newFlag!) else {
                         fatalError("non-unique flag \(newFlag!.inSingleQuotes())")
                 }
+                
                 usedFlags.insert(newFlag!)
         }
         
@@ -55,6 +58,7 @@ open class OptionParser {
                         let flag = $0.flag.short ?? $0.flag.long!
                         return $0.isRequired ? flag : "[" + flag + "]"
                 }
+                
                 return flags.joined(separator: " ")
         }
         
@@ -267,10 +271,15 @@ open class OptionParser {
                 catch let error as ParserError {
                         if parserSettings.contains(.throwsErrors) {
                                 throw error
-                        }                        
-                        if let message = error.string {
-                                FileHandle.standardError.write(string: (helpName ?? String.baseName) + ": " + message)
                         }
+                        
+                        switch error {
+                        case ParserError.noInput:
+                                break
+                        default:
+                                FileHandle.standardError.write(string: (helpName ?? String.baseName) + ": \(error)")
+                        }
+                        
                         FileHandle.standardError.write(string: usage())
                         exit(1)
                 }

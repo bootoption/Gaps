@@ -1,5 +1,5 @@
 /*
- * extensions.swift
+ * Extensions.swift
  * Copyright © 2014 Ben Gollmer
  * Copyright © 2017-2019 vulgo
  * SPDX-License-Identifier: Apache-2.0

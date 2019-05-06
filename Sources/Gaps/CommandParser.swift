@@ -26,7 +26,7 @@ open class CommandParser {
         
         private func add(_ command: Command) {
                 if values.contains(command.value) {
-                        fatalError("non-unique command value \(command.value.inSingleQuotes())")
+                        fatalError("non-unique command value '\(command.value)'")
                 }
                 commands.append(command)
         }
@@ -76,8 +76,11 @@ open class CommandParser {
                 }
                 
                 catch let error as ParserError {
-                        if let message = error.string {
-                                FileHandle.standardError.write(string: message)
+                        switch error {
+                        case ParserError.noInput:
+                                break
+                        default:
+                                FileHandle.standardError.write(string: "\(error)")
                         }
                         FileHandle.standardError.write(string: usage())
                         exit(1)
