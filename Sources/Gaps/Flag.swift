@@ -6,11 +6,11 @@
  */
 
 public struct Flag {
-        var short: String? = nil
+        public var short: String? = nil
         
-        var long: String? = nil
+        public var long: String? = nil
         
-        var values: [String] {
+        public var values: [String] {
                 switch (short, long) {
                 case (.some, .some):
                         return [short!, long!]
